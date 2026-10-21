@@ -1,0 +1,18 @@
+# ASM Expense - Production Keystore Configuration Template
+# Copy this file to 'key.properties' in mobile/android/ (do NOT commit key.properties).
+#
+# storePassword: Password of your corporate release keystore
+# keyPassword: Password for the private key
+# keyAlias: Alias name of the signing key
+# storeFile: Path to the .jks or .keystore file (relative to mobile/android/app/ or absolute)
+#
+# Example:
+# storePassword=AlSeerMarineProd2026!
+# keyPassword=AlSeerMarineProd2026!
+# keyAlias=alseer-release
+# storeFile=../upload-keystore.jks
+
+storePassword=
+keyPassword=
+keyAlias=
+storeFile=

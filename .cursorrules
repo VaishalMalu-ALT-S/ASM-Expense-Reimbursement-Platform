@@ -1,0 +1,65 @@
+# Cursor Project Rules - ASM Expense & Reimbursement Platform
+
+## 1. Project Context
+You are working on the ASM Expense & Reimbursement Platform for Al Seer Marine (ASM).
+Full architectural memory and setup history is located in `PROJECT_MEMORY.md`.
+
+## 2. Critical Constraints & Universal Rules
+1. Zero Emojis:
+   Do NOT use emojis anywhere. No emojis in code, UI strings, chip labels, commit messages, or chat responses.
+2. Financial Math (Integer Minor Units):
+   All monetary amounts (AED, USD, EUR, etc.) must be stored and calculated as integers representing the minor unit (e.g., fils for AED: 100 fils = 1.00 AED; cents for USD).
+   Never perform binary floating point arithmetic on money. Use `MoneyUtils` (`mobile/lib/core/utils/money_utils.dart`).
+3. Never Trust the Client:
+   All business policy checks (e.g., maximum claim amounts, receipt requirements above AED 500) and workflow state transitions must be validated on the backend via PostgreSQL functions and triggers in Supabase.
+4. Navigation Safety:
+   Never call `context.pop()` without checking `if (context.canPop())`. If it cannot pop, route to `/dashboard` using `context.go('/dashboard')`.
+5. Visual Enterprise Theme:
+   Follow `AsmTheme` in `mobile/lib/app/theme/asm_theme.dart`.
+   Primary Navy: `#0D253F`
+   Brand Blue: `#1E56A0`
+   Accent Gold: `#C5A059`
+   Background: `#F4F6F9`
+
+## 3. Demo Test Accounts & Original Staff
+Password for all test accounts: `Password123!`
+- Employee: `employee@alseermarine.com` (Ahmed Al Mansoori - Operations)
+- Line Manager: `manager@alseermarine.com` (Tariq Al Hammadi - Operations)
+- Department Head (HOD): `hod@alseermarine.com` (Dr. Khalid Al Zaabi - Operations)
+- Finance Controller: `finance@alseermarine.com` (Fatima Al Mazrouei - Finance)
+- System Administrator: `admin@alseermarine.com` (Saeed Al Qubaisi - Admin)
+
+Original Company Staff (Can sign in using raw numeric Emp ID or full email):
+- 37317: Meharoof KottileValappil (Operations)
+- 44266: Roldan De Vera (Operations)
+- 23833: Murugan Selvaraj (IMLPPM)
+- 48359: Simon Joseph Frederick Davis (IMLPPM - Line Manager)
+- 34451: Vivek Shripad Kulkarni (IMLPPM)
+- 23775: Toufeeq Jeelani (IMLPPM)
+- 38135: Hernan Je Margarico (IMLPPM)
+- 43726: Musthaque Aramullan Valiyamadathil (IMLPPM)
+- 45237: Roelito Baltazar (IMLPPM)
+- 47451: Ravindu Vichakshana Rathnayake Rathnayake Mudiyanselage (IMLPPM)
+- 48752: Piotr Zbigniew Targowski (ICG.SCM - Line Manager)
+- 48690: Muhammad Raheel Arif Sami (ICG.SCM)
+- 29018: Srikanth Kathula (ICG.FIN - Finance)
+- 24436: Murtuza Ali Syed (ICG.FIN - Finance)
+- 47619: Jessica Peters (ICG.FIN - Finance)
+- 42421: Prashant Wagadre (ICG.FIN - Finance)
+- 48407: Nishadi Dilhari Thalangodalage (ICG.FIN - Finance)
+- 50312: Sebin Vadakkemelathil Thankachan (ASM.Integration)
+
+## 4. Key Services & Ports
+- Flutter Web Dev Server: Port 8080 (`http://localhost:8080`)
+- Node Static Web Server: Port 3005 (`http://localhost:3005`)
+- NVIDIA Nemotron OCR Microservice: Port 8001 (`http://localhost:8001`)
+- Supabase Project URL: `https://vrnqemqzmklrjpssneng.supabase.co`
+
+## 5. Primary Code Locations
+- Flutter Main: `mobile/lib/main.dart`
+- Routing: `mobile/lib/app/router/app_router.dart`
+- Enterprise Shell: `mobile/lib/shared/widgets/enterprise_shell.dart`
+- Supabase Service: `mobile/lib/core/network/supabase_service.dart`
+- Receipt OCR Extractor: `mobile/lib/core/services/receipt_extractor.dart`
+- OCR Microservice: `services/unlimited_ocr/app.py`
+- Database Migrations: `supabase/migrations/`

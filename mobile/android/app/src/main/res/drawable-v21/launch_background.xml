@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native launch window shown until Flutter draws the ASM splash (lib/features/splash) -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/asm_splash_background" />
+</layer-list>

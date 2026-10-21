@@ -1,0 +1,44 @@
+# Environment & Secrets (NEVER COMMIT)
+.env
+.env.*
+!.env.example
+*.env
+temporary_credentials.csv
+
+# Android Keystore & Secrets
+key.properties
+*.keystore
+*.jks
+
+# Flutter & Build Artifacts
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub/
+.pub-cache/
+build/
+**/build/
+
+# IDE & OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Scratch & Test Output
+scratch/*.png
+scratch/*.jpg
+scratch/*.json
+scratch/*.mjs
+scratch/*.py
+scratch/*.log
+
+# Node dependencies
+node_modules/
+package-lock.json
+
+# Python cache
+__pycache__/
+*.pyc
+.pytest_cache/
