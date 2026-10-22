@@ -213,76 +213,93 @@ class _FinanceReimbursementScreenState extends State<FinanceReimbursementScreen>
                         final emp = r['employees'] as Map<String, dynamic>?;
                         final claim = r['expense_claims'] as Map<String, dynamic>?;
                         final isPaid = r['status'] == 'PAID';
+                        final claimId = (r['claim_id'] ?? r['id']) as String?;
                         final amountMinor = (r['amount_minor'] as num).toInt();
 
                         return Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        (emp?['full_name'] as String? ?? 'Employee').replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim(),
-                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: claimId == null
+                                ? null
+                                : () async {
+                                    await context.push('/claims/$claimId');
+                                    if (mounted) _loadReimbursements();
+                                  },
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          (emp?['full_name'] as String? ?? 'Employee').replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim(),
+                                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        MoneyUtils.format(amountMinor),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16,
+                                          color: isPaid ? AsmTheme.statusApproved : AsmTheme.primaryNavy,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'Claim #${claim?['claim_number'] ?? ''} • ${claim?['title'] ?? ''}',
+                                          style: const TextStyle(fontSize: 13, color: AsmTheme.textSecondary),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const Icon(Icons.chevron_right, size: 18, color: AsmTheme.textMuted),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: (isPaid ? AsmTheme.statusApproved : AsmTheme.statusPending).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      isPaid ? 'PAID / SETTLED' : 'AWAITING DISBURSEMENT',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: isPaid ? AsmTheme.statusApproved : AsmTheme.statusPending,
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      MoneyUtils.format(amountMinor),
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 16,
-                                        color: isPaid ? AsmTheme.statusApproved : AsmTheme.primaryNavy,
+                                  ),
+                                  if (!isPaid) ...[
+                                    const Divider(height: 20),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: ElevatedButton.icon(
+                                        icon: _payingId == r['id']
+                                            ? const SizedBox(
+                                                width: 14,
+                                                height: 14,
+                                                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)),
+                                              )
+                                            : const Icon(Icons.payment_outlined, size: 16),
+                                        label: const Text('Record Payment'),
+                                        onPressed: _payingId != null ? null : () => _recordPayment(r, amountMinor),
                                       ),
                                     ),
                                   ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Claim #${claim?['claim_number'] ?? ''} • ${claim?['title'] ?? ''}',
-                                  style: const TextStyle(fontSize: 13, color: AsmTheme.textSecondary),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: (isPaid ? AsmTheme.statusApproved : AsmTheme.statusPending).withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    isPaid ? 'PAID / SETTLED' : 'AWAITING DISBURSEMENT',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: isPaid ? AsmTheme.statusApproved : AsmTheme.statusPending,
-                                    ),
-                                  ),
-                                ),
-                                if (!isPaid) ...[
-                                  const Divider(height: 20),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: ElevatedButton.icon(
-                                      icon: _payingId == r['id']
-                                          ? const SizedBox(
-                                              width: 14,
-                                              height: 14,
-                                              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)),
-                                            )
-                                          : const Icon(Icons.payment_outlined, size: 16),
-                                      label: const Text('Record Payment'),
-                                      onPressed: _payingId != null ? null : () => _recordPayment(r, amountMinor),
-                                    ),
-                                  ),
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                         );

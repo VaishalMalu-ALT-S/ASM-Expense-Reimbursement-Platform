@@ -5,7 +5,6 @@ import 'package:uuid/uuid.dart';
 import '../../core/network/supabase_service.dart';
 import '../../core/utils/money_utils.dart';
 import '../../shared/models/expense.dart';
-import '../../shared/models/cash_advance.dart';
 import '../../app/theme/asm_theme.dart';
 
 /// Creates a new claim, or - when [correctionClaimId] is set - corrects and
@@ -25,9 +24,7 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
   final _purposeController = TextEditingController();
 
   List<Expense> _availableExpenses = [];
-  List<CashAdvance> _availableAdvances = [];
   final Set<String> _selectedExpenseIds = {};
-  String? _selectedAdvanceId;
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -60,7 +57,6 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
     try {
       final service = SupabaseService();
       final expenses = (await service.getMyExpenses()).where((e) => !e.isLocked).toList();
-      final advances = await service.getMyAdvances();
       final limitRule = await service.client
           .from('policy_rules')
           .select('rule_value')
@@ -75,7 +71,7 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
       if (_isCorrection) {
         claim = await service.client
             .from('expense_claims')
-            .select('claim_number, title, purpose, status, cash_advance_id, validation_notes')
+            .select('claim_number, title, purpose, status, validation_notes')
             .eq('id', widget.correctionClaimId!)
             .maybeSingle();
         if (claim == null || claim['status'] != 'CORRECTION_REQUIRED') {
@@ -104,9 +100,6 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
         _availableExpenses = expenses
             .where((e) => !activeLinks.containsKey(e.id) || activeLinks[e.id] == widget.correctionClaimId)
             .toList();
-        _availableAdvances = advances
-            .where((a) => a.status == CashAdvanceStatus.paid || a.status == CashAdvanceStatus.partiallySettled)
-            .toList();
         if (claim != null) {
           _claimNumber = claim['claim_number'] as String?;
           _correctionReason = correctionReason;
@@ -115,8 +108,6 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
           _selectedExpenseIds
             ..clear()
             ..addAll(activeLinks.entries.where((l) => l.value == widget.correctionClaimId).map((l) => l.key));
-          final advanceId = claim['cash_advance_id'] as String?;
-          _selectedAdvanceId = _availableAdvances.any((a) => a.id == advanceId) ? advanceId : null;
         }
         _isLoading = false;
       });
@@ -136,19 +127,10 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
         .fold<int>(0, (sum, item) => sum + item.aedAmountMinor);
   }
 
-  int get _selectedAdvanceBalanceMinor {
-    if (_selectedAdvanceId == null) return 0;
-    final adv = _availableAdvances.firstWhere((a) => a.id == _selectedAdvanceId);
-    return adv.remainingBalanceMinor;
-  }
-
   /// Configured claim ceiling (policy_rules.max_claim_limit_aed); enforced server-side.
   int? _maxClaimMinor;
 
-  int get _netReimbursementMinor {
-    final diff = _selectedTotalAedMinor - _selectedAdvanceBalanceMinor;
-    return diff > 0 ? diff : 0;
-  }
+  int get _netReimbursementMinor => _selectedTotalAedMinor;
 
   Future<void> _submitClaim() async {
     if (!_formKey.currentState!.validate()) return;
@@ -169,7 +151,6 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
               claimId: widget.correctionClaimId!,
               idempotencyKey: _idempotencyKey,
               expenseIds: _selectedExpenseIds.toList(),
-              cashAdvanceId: _selectedAdvanceId,
               title: _titleController.text.trim(),
               purpose: _purposeController.text.trim(),
             )
@@ -178,7 +159,6 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
               title: _titleController.text.trim(),
               purpose: _purposeController.text.trim(),
               expenseIds: _selectedExpenseIds.toList(),
-              cashAdvanceId: _selectedAdvanceId,
             );
 
       if (submitRes['success'] == true) {
@@ -320,27 +300,6 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Reconcile Against Cash Advance
-              if (_availableAdvances.isNotEmpty) ...[
-                const Text('Apply Against Cash Advance', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String?>(
-                  value: _selectedAdvanceId,
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('No advance (Direct Reimbursement)')),
-                    ..._availableAdvances.map((adv) {
-                      return DropdownMenuItem(
-                        value: adv.id,
-                        child: Text('${adv.advanceNumber} â€” Bal: ${MoneyUtils.format(adv.remainingBalanceMinor)}'),
-                      );
-                    }),
-                  ],
-                  onChanged: (val) => setState(() => _selectedAdvanceId = val),
-                  decoration: const InputDecoration(),
-                ),
-                const SizedBox(height: 20),
-              ],
-
               // Select Expenses
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -380,7 +339,7 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
                       value: isSelected,
                       title: Text(exp.vendor, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                       subtitle: Text(
-                        '${exp.categoryName ?? 'Expense'} â€¢ ${exp.expenseDate.toIso8601String().split('T')[0]} ${!exp.hasReceipt ? '(No Receipt)' : ''}',
+                        '${exp.categoryName ?? 'Expense'} • ${exp.expenseDate.toIso8601String().split('T')[0]} ${!exp.hasReceipt ? '(No Receipt)' : ''}',
                         style: const TextStyle(fontSize: 12),
                       ),
                       secondary: Text(
@@ -424,16 +383,6 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
                           Text(MoneyUtils.format(_selectedTotalAedMinor), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                         ],
                       ),
-                      if (_selectedAdvanceId != null) ...[
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Advance Applied:', style: TextStyle(fontSize: 13, color: AsmTheme.textSecondary)),
-                            Text('- ${MoneyUtils.format(_selectedAdvanceBalanceMinor)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AsmTheme.statusPending)),
-                          ],
-                        ),
-                      ],
                       const Divider(height: 20),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -442,13 +391,6 @@ class _CreateClaimScreenState extends State<CreateClaimScreen> {
                           Text(MoneyUtils.format(_netReimbursementMinor), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AsmTheme.statusApproved)),
                         ],
                       ),
-                      if (_selectedAdvanceId != null) ...[
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Estimate. The advance amount applied is confirmed on submission against the balance not already used or reserved by your other claims.',
-                          style: TextStyle(fontSize: 11, color: AsmTheme.textSecondary),
-                        ),
-                      ],
                     ],
                   ),
                 ),

@@ -35,7 +35,9 @@ The ASM Expense & Reimbursement Platform automates and governs corporate spendin
 - **Strict Financial Math:** Integer-only minor units (`fils` / cents) preventing IEEE 754 floating-point rounding discrepancies.
 - **Hierarchical Approval Routing:** Dynamic multi-tier approval chains spanning Line Manager, Head of Department (HOD), Executive Management (Siva), and Finance Controller (Fatima Al Mazrouei).
 - **Frozen Bilingual OCR Engine:** Server-authoritative receipt extraction processing English and Arabic tax invoices with deterministic rotation across Vision AI providers and local Tesseract fallback.
-- **Cash Advance Reconciliation:** Complete cash advance request-to-disbursement lifecycle with automatic balance offsetting and leftover refund handling.
+- **Direct Expense Claim Flow:** Standard employee reimbursement workflow without advance-linking requirements (`advance_applied_minor = 0`, `net_reimbursement = total_expense`).
+- **Flexible Multi-Currency & Auto-Detection:** Searchable global currency catalog (GBP £, INR ₹, USD $, EUR €, AED, SAR, QAR, etc.), custom ISO-4217 currency support, and automatic receipt OCR currency preselection with authoritative server-rate conversion.
+- **Standalone Cash Advance Subsystem:** Dedicated cash advance request-to-disbursement module with approval lifecycle and leftover refund handling, cleanly isolated from normal expense claims.
 - **Enterprise Security:** Comprehensive PostgreSQL Row-Level Security (RLS), defensive database triggers preventing state tampering, audit trails, and client route guards.
 
 ---
@@ -136,7 +138,9 @@ sequenceDiagram
     DB-->>FIN: Status updated: PAID (Expenses locked)
 ```
 
-### 2. Cash Advance & Leftover Refund Lifecycle
+### 2. Standalone Cash Advance Lifecycle & Leftover Refunds
+
+The platform maintains a dedicated, standalone Cash Advance subsystem for employees who need operational cash before travel or field refits. This module operates independently from the normal expense claim flow, preventing employees from having to reconcile or attach advances to standard reimbursement claims.
 
 ```mermaid
 stateDiagram-v2
@@ -149,8 +153,7 @@ stateDiagram-v2
     
     APPROVED --> PAID: record_cash_advance_payment()
     
-    PAID --> SETTLED: Expense Claim Offset (Full)
-    PAID --> SETTLED: record_cash_advance_refund() (Unused Cash Return)
+    PAID --> SETTLED: record_cash_advance_refund() (Cash Return / Leftover Deposit)
     
     LINE_MANAGER_REVIEW --> REJECTED: review_cash_advance(REJECT)
     HOD_REVIEW --> REJECTED: review_cash_advance(REJECT)
@@ -196,6 +199,7 @@ The OCR module operates under a strict **Production Freeze** with proven determi
 ```
 
 - **Validation Suite:** 35/35 Node.js test cases + 19/19 Python test cases passing (100% pass rate).
+- **Multi-Currency Auto-Detection:** Automatically recognizes currency symbols and ISO codes on receipts (e.g. `£` / `GBP`, `₹` / `INR`, `€` / `EUR`, `$` / `USD`, `AED`, `SAR`, `QAR`) and preselects the corresponding currency in the expense verification form.
 - **Zero Hallucination Policy:** Fields that cannot be extracted with high confidence remain `null` rather than guessing.
 
 ---
@@ -239,11 +243,11 @@ ASM-Expense-Reimbursement-Platform/
 │   │   │   ├── reimbursements/           # Finance Audit & Disbursement
 │   │   │   └── reports/                  # Analytics & PDF/CSV Export
 │   │   └── shared/                       # Models, Timeline & Reusable Widgets
-│   └── test/                             # 109 Unit, Widget & Contract Tests
+│   └── test/                             # 114 Unit, Widget & Contract Tests
 ├── supabase/                             # Backend Migrations & Serverless
 │   ├── functions/
 │   │   └── process-receipt-ocr/          # Deno OCR Orchestrator & Normalizer
-│   ├── migrations/                       # 15 Versioned SQL Database Migrations
+│   ├── migrations/                       # 17 Versioned SQL Database Migrations
 │   │   └── CONSOLIDATED_MASTER_SETUP.sql # Consolidated Baseline Schema
 │   └── tests/                            # Node.js OCR Unit & Integration Tests
 ├── services/
@@ -306,7 +310,7 @@ flutter run -d chrome
 
 ### 3. Running Automated Test Suites
 ```bash
-# Mobile Unit & Widget Tests (109 tests)
+# Mobile Unit & Widget Tests (114 tests)
 cd mobile
 flutter test
 

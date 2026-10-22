@@ -334,12 +334,24 @@ def parse_vendor(lines: Sequence[str]) -> Tuple[Optional[str], Optional[str], in
 
 def parse_currency(lines: Sequence[str]) -> Tuple[Optional[str], int]:
     for i, line in enumerate(lines):
-        m = re.search(r"\b(AED|DHS|DIRHAMS?|USD|EUR)(?![A-Za-z])|(درهم|د\.?\s?إ)", line, re.IGNORECASE)
+        if re.search(r"[£]\s*\d|\d\s*[£]|\bGBP\b", line, re.IGNORECASE):
+            return "GBP", i
+        if re.search(r"[₹]\s*\d|\d\s*[₹]|\b(?:INR|RS\.?|RUPEES?)\b", line, re.IGNORECASE):
+            return "INR", i
+        if re.search(r"[€]\s*\d|\d\s*[€]|\bEUR\b", line, re.IGNORECASE):
+            return "EUR", i
+        if re.search(r"\b(?:SAR|SR|RIYALS?)\b", line, re.IGNORECASE):
+            return "SAR", i
+        if re.search(r"\b(?:QAR|QR)\b", line, re.IGNORECASE):
+            return "QAR", i
+        m = re.search(r"\b(AED|DHS|DIRHAMS?|USD|EUR|GBP|INR|SAR|QAR|OMR|BHD|KWD|SGD|JPY|CHF|CAD|AUD)(?![A-Za-z])|(درهم|د\.?\s?إ)", line, re.IGNORECASE)
         if m:
             if m.group(2):
                 return "AED", i
             c = m.group(1).upper()
             return ("AED" if c in ("DHS", "DIRHAM", "DIRHAMS") else c), i
+        if re.search(r"[$]\s*\d|\d\s*[$]|\bUSD\b", line, re.IGNORECASE):
+            return "USD", i
     for i, line in enumerate(lines):
         if re.search(r"\b(?:TRN\s*[:#]?\s*100\d{12}|Abu\s*Dhabi|Dubai|Sharjah|Ajman|Fujairah|Ras\s*Al\s*Khaimah|\bUAE\b)", line, re.IGNORECASE):
             return "AED", i

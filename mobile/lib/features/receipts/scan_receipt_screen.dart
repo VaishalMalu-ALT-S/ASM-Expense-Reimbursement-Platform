@@ -7,6 +7,8 @@ import 'package:uuid/uuid.dart';
 import '../../core/network/supabase_service.dart';
 import '../../core/utils/money_utils.dart';
 import '../../shared/models/expense.dart';
+import '../../shared/models/currency_item.dart';
+import '../../shared/widgets/currency_picker_modal.dart';
 import '../../shared/widgets/duplicate_prompt.dart';
 import '../../core/services/receipt_extractor.dart';
 import '../../app/theme/asm_theme.dart';
@@ -31,8 +33,6 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
   String? _receiptFileName;
   String _idempotencyKey = const Uuid().v4();
 
-  static const _supportedCurrencies = ['AED', 'USD', 'EUR'];
-
   // Extracted/Verified Form Fields
   final _vendorController = TextEditingController();
   final _amountController = TextEditingController();
@@ -41,6 +41,7 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
   final _descriptionController = TextEditingController();
 
   List<ExpenseCategory> _categories = [];
+  List<CurrencyItem> _currencies = [];
   String? _selectedCategoryId;
   // Undetected values stay empty until the employee enters them; nothing defaults to today or AED.
   String? _selectedCurrency;
@@ -65,10 +66,13 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
   }
 
   Future<void> _loadCategories() async {
-    final cats = await SupabaseService().getCategories();
+    final service = SupabaseService();
+    final cats = await service.getCategories();
+    final currs = await service.getCurrencies();
     if (mounted) {
       setState(() {
         _categories = cats;
+        _currencies = currs;
         if (cats.isEmpty) {
           _errorMessage = 'Expense categories could not be loaded. Check your connection and reopen this screen.';
         }
@@ -317,8 +321,12 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
         if (ocr.invoiceNumber != null && ocr.invoiceNumber!.isNotEmpty) {
           _invoiceController.text = ocr.invoiceNumber!;
         }
-        if (ocr.currency != null && _supportedCurrencies.contains(ocr.currency)) {
-          _selectedCurrency = ocr.currency!;
+        if (ocr.currency != null && ocr.currency!.isNotEmpty) {
+          final detected = ocr.currency!.trim().toUpperCase();
+          _selectedCurrency = detected;
+          if (!_currencies.any((c) => c.code == detected)) {
+            _currencies.add(CurrencyItem(code: detected, name: detected, symbol: detected));
+          }
         } else {
           _selectedCurrency ??= 'AED';
         }
@@ -406,6 +414,18 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
     if (_selectedCategoryId == null) {
       setState(() => _errorMessage = 'Please select a category.');
       return;
+    }
+
+    // Verify exchange rate availability from server before submission
+    if (_selectedCurrency != 'AED') {
+      final rate = await SupabaseService().getExchangeRateToAed(_selectedCurrency!, expenseDate);
+      if (rate == null || rate <= 0) {
+        setState(() {
+          _errorMessage = 'No exchange rate to AED is configured for $_selectedCurrency on '
+              '${expenseDate.toIso8601String().split('T')[0]}. Please contact Finance.';
+        });
+        return;
+      }
     }
 
     setState(() {
@@ -708,17 +728,37 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
                     children: [
                       const Text('Currency *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                       const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        value: _selectedCurrency,
-                        isExpanded: true,
-                        hint: const Text('Select'),
-                        items: const [
-                          DropdownMenuItem(value: 'AED', child: Text('AED')),
-                          DropdownMenuItem(value: 'USD', child: Text('USD')),
-                          DropdownMenuItem(value: 'EUR', child: Text('EUR')),
-                        ],
-                        onChanged: (val) => setState(() => _selectedCurrency = val),
-                        decoration: const InputDecoration(),
+                      InkWell(
+                        onTap: () async {
+                          final chosen = await CurrencyPickerModal.show(
+                            context,
+                            currencies: _currencies,
+                            selectedCurrencyCode: _selectedCurrency,
+                          );
+                          if (chosen != null) {
+                            setState(() {
+                              _selectedCurrency = chosen.code;
+                              if (!_currencies.any((c) => c.code == chosen.code)) {
+                                _currencies.add(chosen);
+                              }
+                            });
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                            suffixIcon: Icon(Icons.arrow_drop_down, size: 22),
+                          ),
+                          child: Text(
+                            _selectedCurrency ?? 'Select',
+                            style: TextStyle(
+                              fontWeight: _selectedCurrency != null ? FontWeight.w700 : FontWeight.w400,
+                              fontSize: 14,
+                              color: _selectedCurrency != null ? AsmTheme.textPrimary : AsmTheme.textSecondary,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),

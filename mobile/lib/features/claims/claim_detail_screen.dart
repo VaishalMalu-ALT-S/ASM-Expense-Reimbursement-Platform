@@ -843,14 +843,16 @@ class _ClaimDetailScreenState extends State<ClaimDetailScreen> with SingleTicker
                 Text(MoneyUtils.format(_claim!.totalExpenseMinor), style: const TextStyle(fontWeight: FontWeight.w700)),
               ],
             ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Cash Advance Applied:'),
-                Text('- ${MoneyUtils.format(_claim!.advanceAppliedMinor)}', style: const TextStyle(fontWeight: FontWeight.w700, color: AsmTheme.statusPending)),
-              ],
-            ),
+            if (_claim!.advanceAppliedMinor > 0) ...[
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Cash Advance Applied:'),
+                  Text('- ${MoneyUtils.format(_claim!.advanceAppliedMinor)}', style: const TextStyle(fontWeight: FontWeight.w700, color: AsmTheme.statusPending)),
+                ],
+              ),
+            ],
             const Divider(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

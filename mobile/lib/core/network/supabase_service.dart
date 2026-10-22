@@ -5,6 +5,7 @@ import '../../shared/models/expense.dart';
 import '../../shared/models/expense_claim.dart';
 import '../../shared/models/cash_advance.dart';
 import '../../shared/models/app_notification.dart';
+import '../../shared/models/currency_item.dart';
 
 /// Central Supabase Repository managing authentication, state, and server calls.
 class SupabaseService {
@@ -76,6 +77,93 @@ class SupabaseService {
     } catch (e) {
       debugPrint('Expense categories unavailable: $e');
       return const [];
+    }
+  }
+
+  /// Fetch active supported currencies
+  Future<List<CurrencyItem>> getCurrencies() async {
+    try {
+      final res = await client
+          .from('currencies')
+          .select()
+          .eq('is_active', true)
+          .order('code');
+      return (res as List).map((c) => CurrencyItem.fromJson(Map<String, dynamic>.from(c as Map))).toList();
+    } catch (e) {
+      debugPrint('Currencies unavailable: $e');
+      return const [
+        CurrencyItem(code: 'AED', name: 'United Arab Emirates Dirham', symbol: 'AED'),
+        CurrencyItem(code: 'USD', name: 'United States Dollar', symbol: r'$'),
+        CurrencyItem(code: 'EUR', name: 'Euro', symbol: '€'),
+        CurrencyItem(code: 'GBP', name: 'British Pound', symbol: '£'),
+        CurrencyItem(code: 'INR', name: 'Indian Rupee', symbol: '₹'),
+      ];
+    }
+  }
+
+  /// Register a custom currency
+  Future<Map<String, dynamic>> registerCustomCurrency({
+    required String code,
+    required String name,
+    required String symbol,
+    int decimals = 2,
+  }) async {
+    final cleanCode = code.trim().toUpperCase();
+    final cleanName = name.trim();
+    final cleanSymbol = symbol.trim().isEmpty ? cleanCode : symbol.trim();
+
+    try {
+      final res = await client.from('currencies').upsert({
+        'code': cleanCode,
+        'name': cleanName,
+        'symbol': cleanSymbol,
+        'decimals': decimals,
+        'is_base': false,
+        'is_active': true,
+      }).select().single();
+      return {'success': true, 'currency': CurrencyItem.fromJson(res)};
+    } catch (e) {
+      return {'success': false, 'message': 'Could not register custom currency: $e'};
+    }
+  }
+
+  /// Checks if a server exchange rate exists to AED for the currency
+  Future<double?> getExchangeRateToAed(String currencyCode, [DateTime? onDate]) async {
+    final code = currencyCode.trim().toUpperCase();
+    if (code == 'AED') return 1.0;
+    try {
+      final dateStr = (onDate ?? DateTime.now()).toIso8601String().split('T')[0];
+      final res = await client
+          .from('exchange_rates')
+          .select('rate')
+          .eq('from_currency', code)
+          .eq('to_currency', 'AED')
+          .lte('effective_date', dateStr)
+          .order('effective_date', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (res != null && res['rate'] != null) {
+        return (res['rate'] as num).toDouble();
+      }
+
+      // Check earliest fallback
+      final fallback = await client
+          .from('exchange_rates')
+          .select('rate')
+          .eq('from_currency', code)
+          .eq('to_currency', 'AED')
+          .order('effective_date', ascending: true)
+          .limit(1)
+          .maybeSingle();
+
+      if (fallback != null && fallback['rate'] != null) {
+        return (fallback['rate'] as num).toDouble();
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error checking exchange rate: $e');
+      return null;
     }
   }
 

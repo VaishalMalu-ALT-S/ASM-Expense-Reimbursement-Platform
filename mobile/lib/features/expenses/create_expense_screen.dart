@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 import '../../core/network/supabase_service.dart';
 import '../../core/utils/money_utils.dart';
 import '../../shared/models/expense.dart';
+import '../../shared/models/currency_item.dart';
+import '../../shared/widgets/currency_picker_modal.dart';
 import '../../app/theme/asm_theme.dart';
 import '../../shared/widgets/async_states.dart';
 import '../../shared/widgets/duplicate_prompt.dart';
@@ -27,6 +29,7 @@ class _CreateExpenseScreenState extends State<CreateExpenseScreen> {
   final _noReceiptReasonController = TextEditingController();
 
   List<ExpenseCategory> _categories = [];
+  List<CurrencyItem> _currencies = [];
   String? _selectedCategoryId;
   String _selectedCurrency = 'AED';
   DateTime _selectedDate = DateTime.now();
@@ -80,11 +83,14 @@ class _CreateExpenseScreenState extends State<CreateExpenseScreen> {
 
   Future<void> _loadCategories() async {
     setState(() => _isLoading = true);
-    final cats = await SupabaseService().getCategories();
+    final service = SupabaseService();
+    final cats = await service.getCategories();
+    final currs = await service.getCurrencies();
     if (_isEdit) await _loadExpenseForEdit(cats);
     if (mounted) {
       setState(() {
         _categories = cats;
+        _currencies = currs;
         if (cats.isNotEmpty) {
           _selectedCategoryId ??= cats.first.id;
         } else {
@@ -106,6 +112,18 @@ class _CreateExpenseScreenState extends State<CreateExpenseScreen> {
     if (amountMinor == null || amountMinor <= 0) {
       setState(() => _errorMessage = 'Enter a positive amount with up to 2 decimals.');
       return;
+    }
+
+    // Verify exchange rate availability from server before submission
+    if (_selectedCurrency != 'AED') {
+      final rate = await SupabaseService().getExchangeRateToAed(_selectedCurrency, _selectedDate);
+      if (rate == null || rate <= 0) {
+        setState(() {
+          _errorMessage = 'No exchange rate to AED is configured for $_selectedCurrency on '
+              '${_selectedDate.toIso8601String().split('T')[0]}. Please contact Finance.';
+        });
+        return;
+      }
     }
 
     // A receipt only counts once the image is attached and linked server-side.
@@ -297,15 +315,33 @@ class _CreateExpenseScreenState extends State<CreateExpenseScreen> {
                       children: [
                         const Text('Currency', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                         const SizedBox(height: 6),
-                        DropdownButtonFormField<String>(
-                          value: _selectedCurrency,
-                          items: const [
-                            DropdownMenuItem(value: 'AED', child: Text('AED')),
-                            DropdownMenuItem(value: 'USD', child: Text('USD')),
-                            DropdownMenuItem(value: 'EUR', child: Text('EUR')),
-                          ],
-                          onChanged: (val) => setState(() => _selectedCurrency = val ?? 'AED'),
-                          decoration: const InputDecoration(),
+                        InkWell(
+                          onTap: () async {
+                            final chosen = await CurrencyPickerModal.show(
+                              context,
+                              currencies: _currencies,
+                              selectedCurrencyCode: _selectedCurrency,
+                            );
+                            if (chosen != null) {
+                              setState(() {
+                                _selectedCurrency = chosen.code;
+                                if (!_currencies.any((c) => c.code == chosen.code)) {
+                                  _currencies.add(chosen);
+                                }
+                              });
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: InputDecorator(
+                            decoration: const InputDecoration(
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              suffixIcon: Icon(Icons.arrow_drop_down, size: 22),
+                            ),
+                            child: Text(
+                              _selectedCurrency,
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                            ),
+                          ),
                         ),
                       ],
                     ),

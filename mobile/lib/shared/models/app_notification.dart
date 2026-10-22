@@ -1,3 +1,5 @@
+import '../../core/network/supabase_service.dart';
+
 /// Row of the server-generated `notifications` table.
 class AppNotification {
   final String id;
@@ -47,5 +49,23 @@ class AppNotification {
       default:
         return null;
     }
+  }
+
+  /// Resolves direct route when entity requires foreign-key lookup (e.g. reimbursement -> claim_id).
+  Future<String?> resolveRoute() async {
+    if (entityType == 'reimbursement') {
+      try {
+        final res = await SupabaseService().client
+            .from('reimbursements')
+            .select('claim_id')
+            .eq('id', entityId)
+            .maybeSingle();
+        final claimId = res?['claim_id'] as String?;
+        if (claimId != null && claimId.isNotEmpty) {
+          return '/claims/$claimId';
+        }
+      } catch (_) {}
+    }
+    return route;
   }
 }

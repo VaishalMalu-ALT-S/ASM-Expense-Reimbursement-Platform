@@ -30,7 +30,9 @@ export interface OcrOutcome extends OcrFields {
   missing_fields: string[];
 }
 
-export const SUPPORTED_CURRENCIES = ["AED", "USD", "EUR"];
+export const SUPPORTED_CURRENCIES = [
+  "AED", "USD", "EUR", "GBP", "INR", "SAR", "QAR", "OMR", "BHD", "KWD", "SGD", "JPY", "CHF", "CAD", "AUD"
+];
 export const REQUIRED_FIELDS: (keyof OcrFields)[] = ["vendor", "date", "total_minor", "currency"];
 export const VALUE_FIELDS = [
   "vendor", "invoice_number", "receipt_number", "date", "transaction_time",
@@ -590,8 +592,27 @@ function parseVendor(lines: string[]): { vendor: string | null; raw: string | nu
 
 function parseCurrency(lines: string[]): { currency: string | null; line: number } {
   for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/\b(AED|DHS|DIRHAMS?|USD|EUR)(?![A-Za-z])|(درهم|د\.?\s?إ)/i);
+    // Check for explicit currency symbols: £ -> GBP, ₹ / Rs -> INR, € -> EUR, $ -> USD
+    if (/[£]\s*\d|\d\s*[£]|\bGBP\b/i.test(lines[i])) {
+      return { currency: "GBP", line: i };
+    }
+    if (/[₹]\s*\d|\d\s*[₹]|\b(?:INR|RS\.?|RUPEES?)\b/i.test(lines[i])) {
+      return { currency: "INR", line: i };
+    }
+    if (/[€]\s*\d|\d\s*[€]|\bEUR\b/i.test(lines[i])) {
+      return { currency: "EUR", line: i };
+    }
+    if (/\b(?:SAR|SR|RIYALS?)\b/i.test(lines[i])) {
+      return { currency: "SAR", line: i };
+    }
+    if (/\b(?:QAR|QR)\b/i.test(lines[i])) {
+      return { currency: "QAR", line: i };
+    }
+    const m = lines[i].match(/\b(AED|DHS|DIRHAMS?|USD|EUR|GBP|INR|SAR|QAR|OMR|BHD|KWD|SGD|JPY|CHF|CAD|AUD)(?![A-Za-z])|(درهم|د\.?\s?إ)/i);
     if (m) return { currency: m[2] ? "AED" : normalizeCurrency(m[1]), line: i };
+    if (/[$]\s*\d|\d\s*[$]|\bUSD\b/i.test(lines[i])) {
+      return { currency: "USD", line: i };
+    }
   }
   // If UAE indicators are present (UAE TRN, Abu Dhabi, Dubai, etc.), infer AED
   for (let i = 0; i < lines.length; i++) {

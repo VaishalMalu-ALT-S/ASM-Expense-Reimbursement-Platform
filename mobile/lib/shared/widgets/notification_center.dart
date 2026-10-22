@@ -116,7 +116,8 @@ class _NotificationPanelState extends State<_NotificationPanel> {
         await SupabaseService().markNotificationsRead([n.id]);
       } catch (_) {}
     }
-    if (mounted) Navigator.pop(context, n.route);
+    final targetRoute = await n.resolveRoute();
+    if (mounted) Navigator.pop(context, targetRoute);
   }
 
   String _age(DateTime t) {

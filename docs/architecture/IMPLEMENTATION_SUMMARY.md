@@ -38,12 +38,15 @@ The platform was architected strictly following:
 - **Theme & Tokens:** [`AsmTheme`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/app/theme/asm_theme.dart)
 - **Financial Math:** [`MoneyUtils`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/core/utils/money_utils.dart)
 - **Supabase Service:** [`SupabaseService`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/core/network/supabase_service.dart)
-- **Domain Models:** `Employee`, `Expense`, `ExpenseClaim`, `CashAdvance`, `OcrResult`
+- **Domain Models:** `Employee`, `Expense`, `ExpenseClaim`, `CashAdvance`, `OcrResult`, `CurrencyItem`
+- **Widgets & Pickers:** [`CurrencyPickerModal`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/shared/widgets/currency_picker_modal.dart) (searchable currency picker + custom currency support)
 - **Screens Implemented:**
   - [`LoginScreen`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/features/auth/login_screen.dart)
   - [`DashboardScreen`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/features/dashboard/dashboard_screen.dart)
-  - [`CreateExpenseScreen`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/features/expenses/create_expense_screen.dart) (with No-Receipt policy validation)
-  - [`RequestAdvanceScreen`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/features/advances/request_advance_screen.dart)
-  - [`CreateClaimScreen`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/features/claims/create_claim_screen.dart) (with Advance reconciliation & breakup validation)
+  - [`CreateExpenseScreen`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/features/expenses/create_expense_screen.dart) (with multi-currency picker, custom currency & server FX validation)
+  - [`ScanReceiptScreen`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/features/receipts/scan_receipt_screen.dart) (with currency auto-recognition and manual override)
+  - [`RequestAdvanceScreen`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/features/advances/request_advance_screen.dart) (standalone cash advance module)
+  - [`CreateClaimScreen`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/features/claims/create_claim_screen.dart) (clean direct reimbursement flow: `net_reimbursement = total_expense`)
   - [`ClaimListScreen`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/features/claims/claim_list_screen.dart)
+  - [`ClaimDetailScreen`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/features/claims/claim_detail_screen.dart) (conditional advance display for legacy records)
 - **Navigation:** [`appRouter`](file:///d:/Vaishal%20Workspace/ASM%20Expense/mobile/lib/app/router/app_router.dart) with GoRouter.

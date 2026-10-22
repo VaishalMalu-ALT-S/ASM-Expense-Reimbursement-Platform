@@ -319,3 +319,18 @@ rotates them to unique temporary passwords (CSV only) and revokes their sessions
 python rotate_shared_passwords.py
 python rotate_shared_passwords.py --apply
 ```
+
+---
+
+## 9. Recent Targeted Changes
+
+### 9.1 Removal of Advance Payment Option from Normal Expense & Claim Flow
+- **Business Requirement:** Eliminated the Cash Advance selection and deduction option from the normal employee expense and claim flow.
+- **Workflow:** Direct reimbursement where `advance_applied_minor = 0` and `net_reimbursement = total_expense`.
+- **Preservation:** The standalone Cash Advance module (`/advances`) remains fully functional for independent advance issuance, approval, payment, and refund without forcing linkaging during normal claim submissions. Legacy claims with advances continue to render historical deductions accurately.
+
+### 9.2 Searchable Multi-Currency & Auto-Recognition Engine
+- **Currencies Supported:** AED (base), USD, EUR, GBP (£), INR (₹), SAR, QAR, OMR, BHD, KWD, SGD, JPY, CHF, CAD, AUD.
+- **Custom Currency Registration:** Allows entry of 3-letter ISO code, currency name, and symbol with secure registration in `currencies`.
+- **Receipt OCR Auto-Recognition:** Automatically preselects currency detected on physical receipts (e.g. £/GBP, ₹/INR, €/EUR, $/USD) while allowing manual employee correction.
+- **Financial Architecture:** Integer minor units and server-authoritative exchange rates strictly enforced via `get_aed_exchange_rate`. Client-side conversions are never trusted.
