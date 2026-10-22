@@ -514,7 +514,7 @@ class OverallSummaryCard extends StatelessWidget {
   const OverallSummaryCard({
     super.key,
     required this.totalExpensesMinor,
-    required this.advancesMinor,
+    this.advancesMinor = 0,
     required this.reimbursementsMinor,
     required this.totalClaimsCount,
     this.periodLabel = 'This Fiscal Year',
@@ -586,18 +586,7 @@ class OverallSummaryCard extends StatelessWidget {
           ),
           const Divider(height: 24, thickness: 0.6, color: Color(0xFFF1F5F9)),
 
-          // 2. Advances Row
-          _buildSummaryRow(
-            icon: Icons.account_balance_wallet_outlined,
-            iconColor: const Color(0xFF6366F1),
-            iconBgColor: const Color(0xFFEEF2FF),
-            title: 'Advances',
-            value: MoneyUtils.format(advancesMinor),
-            onTap: onTapAdvances,
-          ),
-          const Divider(height: 24, thickness: 0.6, color: Color(0xFFF1F5F9)),
-
-          // 3. Reimbursements Row
+          // 2. Reimbursements Row
           _buildSummaryRow(
             icon: Icons.payments_outlined,
             iconColor: const Color(0xFF0284C7),

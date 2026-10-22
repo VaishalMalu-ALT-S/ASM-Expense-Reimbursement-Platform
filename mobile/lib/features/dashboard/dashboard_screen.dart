@@ -338,12 +338,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             final overallSummary = OverallSummaryCard(
               totalExpensesMinor: totalExpMinor,
-              advancesMinor: m.openAdvanceBalanceMinor,
               reimbursementsMinor: m.paidMinor,
               totalClaimsCount: _claims.length,
               periodLabel: _selectedPeriod,
               onTapExpenses: () => _go('/expenses'),
-              onTapAdvances: () => _go('/advances'),
               onTapReimbursements: () => _go('/claims'),
               onTapClaims: () => _go('/claims'),
             );
@@ -374,14 +372,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
         LayoutBuilder(builder: (context, c) {
           final cols = c.maxWidth >= 900 ? 4 : (c.maxWidth >= 520 ? 2 : 1);
           final tiles = [
-            _Kpi(label: 'In approval', value: MoneyUtils.format(m.inReviewMinor), detail: '${m.inReviewCount} claims under review'),
-            _Kpi(label: 'Approved, awaiting payment', value: MoneyUtils.format(m.awaitingPaymentMinor), detail: '${m.awaitingPaymentCount} claims'),
-            _Kpi(label: 'Reimbursed', value: MoneyUtils.format(m.paidMinor), detail: '${m.paidCount} claims paid'),
             _Kpi(
-              label: 'Open cash advances',
-              value: MoneyUtils.format(m.openAdvanceBalanceMinor),
-              detail: '${m.openAdvanceCount} with unreconciled balance',
-              onTap: () => _go('/advances'),
+              label: 'In approval',
+              value: MoneyUtils.format(m.inReviewMinor),
+              detail: '${m.inReviewCount} claims under review',
+              onTap: () => _go('/claims'),
+            ),
+            _Kpi(
+              label: 'Approved, awaiting payment',
+              value: MoneyUtils.format(m.awaitingPaymentMinor),
+              detail: '${m.awaitingPaymentCount} claims',
+              onTap: () => _go('/claims'),
+            ),
+            _Kpi(
+              label: 'Reimbursed',
+              value: MoneyUtils.format(m.paidMinor),
+              detail: '${m.paidCount} claims paid',
+              onTap: () => _go('/claims'),
             ),
           ];
           return Wrap(
@@ -553,14 +560,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   iconColor: AsmTheme.primaryNavy,
                   iconBg: const Color(0xFFE2E8F0),
                   onTap: () => _go('/claims/new'),
-                ),
-                _QuickActionTile(
-                  icon: Icons.account_balance_wallet_rounded,
-                  title: 'Cash Advance',
-                  subtitle: 'Request travel funds',
-                  iconColor: const Color(0xFF7C3AED),
-                  iconBg: const Color(0xFFF3E8FF),
-                  onTap: () => _go('/advances/new'),
                 ),
               ];
 

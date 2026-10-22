@@ -214,7 +214,6 @@ class _EnterpriseShellState extends State<EnterpriseShell> {
                       _buildNavItem(context, Icons.receipt_long_outlined, 'Expenses', '/expenses'),
                       _buildNavItem(context, Icons.document_scanner_outlined, 'Scan Receipt', '/receipts/scan'),
                       _buildNavItem(context, Icons.folder_outlined, 'Claims', '/claims'),
-                      _buildNavItem(context, Icons.account_balance_wallet_outlined, 'Advances', '/advances'),
                       if (AuthNotifier().isManager)
                         _buildNavItem(context, Icons.approval_outlined, 'Approvals', '/approvals'),
                       if (AuthNotifier().isManagement)
@@ -351,7 +350,6 @@ class _EnterpriseShellState extends State<EnterpriseShell> {
     final auth = AuthNotifier();
     final entries = <(IconData, String, String)>[
       (Icons.add_circle_outline, 'Manual Expense (No Receipt)', '/expenses/new'),
-      (Icons.account_balance_wallet_outlined, 'Cash Advances', '/advances'),
       if (auth.isManager) (Icons.approval_outlined, 'Approvals', '/approvals'),
       if (auth.isManagement) (Icons.verified_user_outlined, 'Management Review', '/approvals/management'),
       if (auth.isFinance) (Icons.payments_outlined, 'Finance Settlement', '/finance/reimbursements'),
