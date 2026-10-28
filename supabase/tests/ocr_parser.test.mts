@@ -329,4 +329,48 @@ test("extracts GBP currency from £ symbol and total amount", () => {
   assert.equal(r.currency, "GBP");
 });
 
+test("French receipt: Facture N°, Montant HT, Montant TVA 20%, Total TTC, EUR comma formatting", () => {
+  const lines = [
+    "Bistro Parisien",
+    "Facture N°: FR-987452",
+    "Date: 14/07/2026 12:45",
+    "Montant HT: 45,00 €",
+    "Montant TVA 20%: 9,00 €",
+    "Total TTC: 54,00 €",
+    "Paiement CB: 54,00 €",
+  ];
+  const r = parse(lines);
+  assert.equal(r.vendor, "Bistro Parisien");
+  assert.equal(r.invoice_number, "FR-987452");
+  assert.equal(r.date, "2026-07-14");
+  assert.equal(r.transaction_time, "12:45");
+  assert.equal(r.subtotal_minor, 4500);
+  assert.equal(r.tax_minor, 900);
+  assert.equal(r.tax_rate_percent, 20);
+  assert.equal(r.total_minor, 5400);
+  assert.equal(r.currency, "EUR");
+});
+
+test("German receipt: Rechnung Nr, MwSt, Gesamtbetrag, EUR comma formatting and German date", () => {
+  const lines = [
+    "Gasthof München",
+    "Rechnung Nr.: DE-2026-118",
+    "Datum: 15.10.2026",
+    "Zwischensumme: 110,00 EUR",
+    "MwSt 19%: 20,90 EUR",
+    "Gesamtbetrag: 130,90 EUR",
+    "Kartenzahlung: 130,90 EUR",
+  ];
+  const r = parse(lines);
+  assert.equal(r.vendor, "Gasthof München");
+  assert.equal(r.invoice_number, "DE-2026-118");
+  assert.equal(r.date, "2026-10-15");
+  assert.equal(r.subtotal_minor, 11000);
+  assert.equal(r.tax_minor, 2090);
+  assert.equal(r.tax_rate_percent, 19);
+  assert.equal(r.total_minor, 13090);
+  assert.equal(r.currency, "EUR");
+});
+
+
 

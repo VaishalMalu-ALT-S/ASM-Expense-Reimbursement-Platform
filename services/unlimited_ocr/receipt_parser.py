@@ -10,61 +10,82 @@ from datetime import date as _date
 from typing import Dict, List, Optional, Sequence, Tuple
 
 ARABIC_RUN = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+")
-# Two-decimal amount with optional thousands separators; handles thermal spacing ("35. 65").
-MONEY_RE = re.compile(r"(?<![\d.,:])(\d{1,3}(?:,\d{3})+\.\s*\d{2}|\d+\.\s*\d{2})(?!\d|[.,]\d)")
-# Table-cell amount where thermal OCR may print the decimal point as ':' ("5:95").
-CELL_MONEY_RE = re.compile(r"(?<![\d.,:])(\d{1,6})([.:])(\d{2})(?![\d.,:])")
-CURRENCY_WORD_RE = re.compile(r"\b(?:AED|DHS|DIRHAMS?|USD|EUR)(?![A-Za-z])|درهم|د\.?\s?إ", re.IGNORECASE)
+# Two-decimal amount with optional thousands separators; handles English ("1,250.50"), European ("1.250,50", "25,50"), and thermal spacing ("35. 65").
+MONEY_RE = re.compile(r"(?<![\d.,:])(\d{1,3}(?:[.,]\d{3})+[.,]\s*\d{2}|\d+[.,]\s*\d{2})(?!\d|[.,]\d)")
+# Table-cell amount where thermal OCR may print the decimal point as ':' ("5:95") or comma/dot.
+CELL_MONEY_RE = re.compile(r"(?<![\d.,:])(\d{1,6})([.:,])(\d{2})(?![\d.,:])")
+CURRENCY_WORD_RE = re.compile(r"\b(?:AED|DHS|DIRHAMS?|USD|EUR|GBP|CHF)(?![A-Za-z])|درهم|د\.?\s?إ|[€£$]", re.IGNORECASE)
 
-SUBTOTAL_RE = re.compile(r"\b(?:su[bhn]\s*-?\s*tota[li|1]|taxab[li|1]e\s*(?:amount)?|net\s*amount)\b|المبلغ\s*الخاضع|الخاضع\s*للضريبة", re.IGNORECASE)
+SUBTOTAL_RE = re.compile(
+    r"\b(?:su[bhn]\s*-?\s*tota[li|1]|taxab[li|1]e\s*(?:amount)?|net\s*amount|sous\s*-?\s*total|montant\s*ht|total\s*ht|zwischensumme|nettobetrag)\b|المبلغ\s*الخاضع|الخاضع\s*للضريبة",
+    re.IGNORECASE)
 SUBTOTAL_EXCLUDE_RE = re.compile(r"\b(?:item|qty|description|price)\s+su[bhn]total\b", re.IGNORECASE)
 TOTAL_STRONG_RE = re.compile(
-    r"\b(?:grand\s*tota[li|1]|net\s*tota[li|1]|total\s*(?:due|payable)|amount\s*(?:due|payable)|balance\s*due)\b|المبلغ\s*الإجمالي|المبلغ\s*الاجمالي|صافي\s*المبلغ|\bilaaall\b", re.IGNORECASE)
-TOTAL_RE = re.compile(r"\btota[li|1]\b|\bمجموع\b|\bالإجمالي\b|\bالاجمالي\b|\bالمبلغ\b", re.IGNORECASE)
+    r"\b(?:grand\s*tota[li|1]|net\s*tota[li|1]|total\s*(?:due|payable)|amount\s*(?:due|payable)|balance\s*due|total\s*ttc|montant\s*ttc|net\s*[àa]\s*payer|gesamtbetrag|endbetrag|gesamtsumme|zu\s*zahlen)\b|المبلغ\s*الإجمالي|المبلغ\s*الاجمالي|صافي\s*المبلغ|\bilaaall\b",
+    re.IGNORECASE)
+TOTAL_RE = re.compile(r"\btota[li|1]\b|\bttc\b|\bsumme\b|\bgesamt\b|\bمجموع\b|\bالإجمالي\b|\bالاجمالي\b|\bالمبلغ\b", re.IGNORECASE)
 TOTAL_EXCLUDE_RE = re.compile(
-    r"\btota[li|1]\s*(?:vat|tax|qty|quantity|items?|discount|savings?|points?|excl\w*|before)\b|\bpoints?\b", re.IGNORECASE)
+    r"\btota[li|1]\s*(?:vat|tax|tva|mwst|ust|qty|quantity|items?|discount|savings?|points?|excl\w*|before)\b|\bpoints?\b",
+    re.IGNORECASE)
 PAYMENT_RE = re.compile(
-    r"\b(?:pa[yv]\w*|paid|bank|card|credit|debit|visa|mastercard|master\s*card|amex|tender\w*|nfc|apple\s*pay|google\s*pay)\b",
+    r"\b(?:pa[yv]\w*|paid|bank|card|credit|debit|visa|mastercard|master\s*card|amex|tender\w*|nfc|apple\s*pay|google\s*pay|carte|cb|bar|barzahlung|kartenzahlung|especes|espèces)\b",
     re.IGNORECASE)
-VATISH_RE = re.compile(r"\bva[t1il!|]\b|\bvat|\btax\b", re.IGNORECASE)
+VATISH_RE = re.compile(r"\bva[t1il!|]\b|\bvat|\btax\b|\btva\b|\bmwst\b|\bust\b|\bsteu?er\b", re.IGNORECASE)
 VAT_SUMMARY_RE = re.compile(
-    r"\b(?:tax\s*amount|vat\s*amount|total\s*vat|total\s*tax|net\s*vat)\b|قيمة\s*الضريبة|مبلغ\s*الضريبة",
+    r"\b(?:tax\s*amount|vat\s*amount|total\s*vat|total\s*tax|net\s*vat|montant\s*tva|total\s*tva|mwst\s*(?:betrag)?|ust\s*(?:betrag)?)\b|قيمة\s*الضريبة|مبلغ\s*الضريبة",
     re.IGNORECASE)
-VAT_LINE_RE = re.compile(r"\b(?:vat|tax)\b", re.IGNORECASE)
+VAT_LINE_RE = re.compile(r"\b(?:vat|tax|tva|mwst|ust)\b", re.IGNORECASE)
 VAT_LINE_EXCLUDE_RE = re.compile(
-    r"\b(?:ta[xk]\s*inv\w*|vat\s*(?:no|reg\w*|#|number|id)|trn|inclusive|incl\.?|excl\w*|summary|taxab[li|1]e)\b",
+    r"\b(?:ta[xk]\s*inv\w*|vat\s*(?:no|reg\w*|#|number|id)|trn|inclusive|incl\.?|excl\w*|summary|taxab[li|1]e|tva\s*intra|ust\s*-?\s*id)\b",
     re.IGNORECASE)
-PERCENT_RE = re.compile(r"(\d{1,2}(?:\.\d{1,2})?)\s*%")
-DATE_LABEL_RE = re.compile(r"\b(?:d[a@]te|dated|dt|till)\b", re.IGNORECASE)
+PERCENT_RE = re.compile(r"(\d{1,2}(?:[.,]\d{1,2})?)\s*%")
+DATE_LABEL_RE = re.compile(r"\b(?:d[a@]te|dated|dt|till|datum)\b", re.IGNORECASE)
 TIME_RE = re.compile(r"(?<![\d:])([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?(?![\d:])")
-_NUMBER_MARK = r"(?:\b(?:n[o0c]\b\.?|no\.|num(?:ber)?\b\.?|[o0]\b)|#)"
+_NUMBER_MARK = r"(?:\b(?:n[o0c]\b\.?|no\.|num(?:ber)?\b\.?|n[°º]\.?|[o0]\b|nr\.?)|#)"
 _ID_VALUE = r"([A-Za-z0-9][A-Za-z0-9/\-_]{2,39})"
-# OCR-tolerant labels: "Tnvo1ce No", "Recelpt Nc", "Bill No", "Sill N No", "Inv. #: 69903", "رقم الفاتورة".
+# OCR-tolerant labels: "Tnvo1ce No", "Recelpt Nc", "Bill No", "Sill N No", "Inv. #: 69903", "Facture No", "Rechnung Nr", "رقم الفاتورة".
 # A number marker or colon is required, so a "Tax Invoice" heading is never read as an invoice number.
 INVOICE_PRIMARY_RE = re.compile(
-    r"(?:^|[^\w])(?:(?:[i1l|t]nv[o0][i1l]ce|inv|[b83s][i1l|]ll|b\.?no|bill)\b[\s\w.#\-]*?" + _NUMBER_MARK + r"|(?:[i1l|t]nv[o0][i1l]ce|inv|[b83s][i1l|]ll)\s*[:#]|(?:^|\s)no\s*[:#]|رقم\s*الفاتور[ةه]|فاتور[ةه]\s*رقم|رقم\s*الإيصال|رقم\s*الايصال)\s*[:.#\-]*\s*" + _ID_VALUE,
+    r"(?:^|[^\w])(?:(?:[i1l|t]nv[o0][i1l]ce|inv|[b83s][i1l|]ll|b\.?no|bill|facture|rechnung)\b[\s\w.#\-]*?" + _NUMBER_MARK + r"|(?:[i1l|t]nv[o0][i1l]ce|inv|[b83s][i1l|]ll|facture|rechnung)\s*[:#]|(?:^|\s)no\s*[:#]|رقم\s*الفاتور[ةه]|فاتور[ةه]\s*رقم|رقم\s*الإيصال|رقم\s*الايصال)\s*[:.#\-]*\s*" + _ID_VALUE,
     re.IGNORECASE)
 INVOICE_ORDER_RE = re.compile(
-    r"(?:^|[^\w])(?:order\s*(?:no|#|num)|talabat\s*#)\s*[:.#\-]*\s*" + _ID_VALUE,
+    r"(?:^|[^\w])(?:order\s*(?:no|#|num)|commande\s*#?|bestellung\s*#?|talabat\s*#)\s*[:.#\-]*\s*" + _ID_VALUE,
     re.IGNORECASE)
 RECEIPT_RE = re.compile(
-    r"(?:^|[^A-Za-z])(?:(?:r[e3]c[e3][i1l]pt|rcpt|rct)\s*" + _NUMBER_MARK + r"|r[e3]c[e3][i1l]pt\s*[:#])\s*[:.#\-]*\s*" + _ID_VALUE,
+    r"(?:^|[^A-Za-z])(?:(?:r[e3]c[e3][i1l]pt|rcpt|rct|quittance|ticket|beleg|quittung)\s*" + _NUMBER_MARK + r"|(?:r[e3]c[e3][i1l]pt|ticket|beleg|quittung)\s*[:#])\s*[:.#\-]*\s*" + _ID_VALUE,
     re.IGNORECASE)
 VENDOR_CUT_RE = re.compile(
-    r"\b(?:ta[xk]\s+[i1l|t][nm]\w*|tax\s*receipt|trn\b|tsn\b|vat\s*(?:no|reg\w*|#)|tel\b|phone\b|mob\w*|p\.?\s*o\.?\s*box|po\s*box|box\s*\d|branch\b|br-\d+|fax\b)|\d{8,}",
+    r"\b(?:ta[xk]\s+[i1l|t][nm]\w*|tax\s*receipt|trn\b|tsn\b|vat\s*(?:no|reg\w*|#)|siret\b|siren\b|tva\b|mwst\b|ust\b|tel\b|phone\b|mob\w*|p\.?\s*o\.?\s*box|po\s*box|box\s*\d|branch\b|br-\d+|fax\b)|\d{8,}",
     re.IGNORECASE)
 VENDOR_SKIP_RE = re.compile(
-    r"^(?:tax\s*invoice|invoice|receipt|welcome|date|cashier|order|customer\s*copy|merchant\s*copy|duplicate|original|talabat|noon)\b",
+    r"^(?:tax\s*invoice|invoice|receipt|facture|quittance|ticket|rechnung|beleg|quittung|welcome|bienvenue|willkommen|date|datum|cashier|order|customer\s*copy|merchant\s*copy|duplicate|original|talabat|noon)\b",
     re.IGNORECASE)
-MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8,
-          "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12}
+MONTHS = {
+    # English
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8,
+    "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12,
+    # French
+    "janv": 1, "fevr": 2, "févr": 2, "mars": 3, "avr": 4, "mai": 5, "juin": 6, "juil": 7,
+    "aout": 8, "août": 8, "decembr": 12, "déc": 12,
+    # German
+    "okt": 10, "dez": 12, "mär": 3, "maerz": 3,
+}
 
 Amount = Tuple[str, int]
 
 
 def to_minor(amount: str) -> Optional[int]:
-    """Decimal string to minor units without float arithmetic."""
-    clean = re.sub(r"[\s,]", "", amount).strip()
+    """Decimal string to minor units without float arithmetic, supporting comma decimals."""
+    clean = re.sub(r"^(?:AED|DHS?|USD|EUR|GBP|CHF|\$|€|£)\s*", "", amount, flags=re.IGNORECASE)
+    clean = re.sub(r"\s*(?:AED|DHS?|USD|EUR|GBP|CHF|€)$", "", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\s+", "", clean).strip()
+
+    # Detect European comma decimal vs English comma thousands
+    if re.fullmatch(r"\d{1,3}(?:\.\d{3})+,\d{2}", clean) or re.fullmatch(r"\d+,\d{1,2}", clean):
+        clean = clean.replace(".", "").replace(",", ".")
+    else:
+        clean = clean.replace(",", "")
+
     m = re.fullmatch(r"(\d{1,9})(?:\.(\d{1,2}))?", clean)
     if not m:
         return None
@@ -74,10 +95,10 @@ def to_minor(amount: str) -> Optional[int]:
 def money_in(text: str) -> List[Amount]:
     out = []
     for m in MONEY_RE.finditer(text):
-        clean = re.sub(r"[\s,]", "", m.group(1))
-        minor = to_minor(clean)
+        raw_match = re.sub(r"\s+", "", m.group(1))
+        minor = to_minor(raw_match)
         if minor is not None:
-            out.append((clean, minor))
+            out.append((raw_match, minor))
     return out
 
 

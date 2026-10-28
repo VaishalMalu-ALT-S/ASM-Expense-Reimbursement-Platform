@@ -192,5 +192,49 @@ class Bilingual(unittest.TestCase):
         self.assertTrue(r["vendor_raw"].startswith("اد ADNOC"))
 
 
+class MultilingualReceipts(unittest.TestCase):
+    def test_french_receipt(self):
+        lines = [
+            "Bistro Parisien",
+            "Facture N°: FR-987452",
+            "Date: 14/07/2026 12:45",
+            "Montant HT: 45,00 €",
+            "Montant TVA 20%: 9,00 €",
+            "Total TTC: 54,00 €",
+            "Paiement CB: 54,00 €",
+        ]
+        r = parse(lines)
+        self.assertEqual(r["vendor"], "Bistro Parisien")
+        self.assertEqual(r["invoice_number"], "FR-987452")
+        self.assertEqual(r["date"], "2026-07-14")
+        self.assertEqual(r["transaction_time"], "12:45")
+        self.assertEqual(r["subtotal_minor"], 4500)
+        self.assertEqual(r["tax_minor"], 900)
+        self.assertEqual(r["tax_rate_percent"], 20.0)
+        self.assertEqual(r["total_minor"], 5400)
+        self.assertEqual(r["currency"], "EUR")
+
+    def test_german_receipt(self):
+        lines = [
+            "Gasthof München",
+            "Rechnung Nr.: DE-2026-118",
+            "Datum: 15.10.2026",
+            "Zwischensumme: 110,00 EUR",
+            "MwSt 19%: 20,90 EUR",
+            "Gesamtbetrag: 130,90 EUR",
+            "Kartenzahlung: 130,90 EUR",
+        ]
+        r = parse(lines)
+        self.assertEqual(r["vendor"], "Gasthof München")
+        self.assertEqual(r["invoice_number"], "DE-2026-118")
+        self.assertEqual(r["date"], "2026-10-15")
+        self.assertEqual(r["subtotal_minor"], 11000)
+        self.assertEqual(r["tax_minor"], 2090)
+        self.assertEqual(r["tax_rate_percent"], 19.0)
+        self.assertEqual(r["total_minor"], 13090)
+        self.assertEqual(r["currency"], "EUR")
+
+
 if __name__ == "__main__":
     unittest.main()
+

@@ -56,7 +56,7 @@ export const EMPTY_FIELDS: OcrFields = {
   field_confidence: {},
 };
 
-/** Decimal major-unit value ("1,250.50", "AED 12.5", 12.5) -> minor units. */
+/** Decimal major-unit value ("1,250.50", "1.250,50", "AED 12.5", "25,50 €", 12.5) -> minor units. */
 export function majorToMinor(value: unknown): number | null {
   let s: string;
   if (typeof value === "number") {
@@ -68,10 +68,19 @@ export function majorToMinor(value: unknown): number | null {
     return null;
   }
   s = s.trim()
-    .replace(/,/g, "")
-    .replace(/^(?:AED|DHS?|USD|EUR|GBP|\$|€|£)\s*/i, "")
-    .replace(/\s*(?:AED|DHS?|USD|EUR|GBP)$/i, "")
+    .replace(/^(?:AED|DHS?|USD|EUR|GBP|CHF|\$|€|£)\s*/i, "")
+    .replace(/\s*(?:AED|DHS?|USD|EUR|GBP|CHF|€)$/i, "")
     .replace(/\s+/g, "");
+
+  // Detect comma as decimal separator vs thousands separator:
+  // e.g. "1.250,50" or "25,50" -> European decimal comma
+  // e.g. "1,250.50" -> Standard English comma thousands, dot decimal
+  if (/^\d{1,3}(?:\.\d{3})+,\d{2}$/.test(s) || /^\d+,\d{1,2}$/.test(s)) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else {
+    s = s.replace(/,/g, "");
+  }
+
   const m = s.match(/^(\d{1,9})(?:\.(\d{1,2}))?$/);
   if (!m) return null;
   return Number(m[1]) * 100 + Number((m[2] ?? "").padEnd(2, "0"));
@@ -301,45 +310,50 @@ export function linesFromDetections(
 // ---------------------------------------------------------------------------
 
 const ARABIC_RUN = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+/g;
-/** Two-decimal amount with optional thousands separators; handles thermal spacing ("35. 65"). */
-const MONEY_RE = /(?<![\d.,:])(\d{1,3}(?:,\d{3})+\.\s*\d{2}|\d+\.\s*\d{2})(?!\d|[.,]\d)/g;
-/** Table-cell amount where thermal OCR may print the decimal point as ':' ("5:95"). */
-const CELL_MONEY_RE = /(?<![\d.,:])(\d{1,6})([.:])(\d{2})(?![\d.,:])/g;
-const CURRENCY_WORD_RE = /\b(?:AED|DHS|DIRHAMS?|USD|EUR)(?![A-Za-z])|درهم|د\.?\s?إ/gi;
+/** Two-decimal amount with optional thousands separators; handles English ("1,250.50"), European ("1.250,50", "25,50"), and thermal spacing ("35. 65"). */
+const MONEY_RE = /(?<![\d.,:])(\d{1,3}(?:[.,]\d{3})+[.,]\s*\d{2}|\d+[.,]\s*\d{2})(?!\d|[.,]\d)/g;
+/** Table-cell amount where thermal OCR may print the decimal point as ':' ("5:95") or comma/dot. */
+const CELL_MONEY_RE = /(?<![\d.,:])(\d{1,6})([.:,])(\d{2})(?![\d.,:])/g;
+const CURRENCY_WORD_RE = /\b(?:AED|DHS|DIRHAMS?|USD|EUR|GBP|CHF)(?![A-Za-z])|درهم|د\.?\s?إ|[€£$]/gi;
 
-const SUBTOTAL_RE = /\b(?:su[bhn]\s*-?\s*tota[li|1]|taxab[li|1]e\s*(?:amount)?|net\s*amount)\b|المبلغ\s*الخاضع|الخاضع\s*للضريبة/i;
+const SUBTOTAL_RE = /\b(?:su[bhn]\s*-?\s*tota[li|1]|taxab[li|1]e\s*(?:amount)?|net\s*amount|sous\s*-?\s*total|montant\s*ht|total\s*ht|zwischensumme|nettobetrag)\b|المبلغ\s*الخاضع|الخاضع\s*للضريبة/i;
 const SUBTOTAL_EXCLUDE_RE = /\b(?:item|qty|description|price)\s+su[bhn]total\b/i;
-const TOTAL_STRONG_RE = /\b(?:grand\s*tota[li|1]|net\s*tota[li|1]|total\s*(?:due|payable)|amount\s*(?:due|payable)|balance\s*due)\b|المبلغ\s*الإجمالي|المبلغ\s*الاجمالي|صافي\s*المبلغ|\bilaaall\b/i;
-const TOTAL_RE = /\btota[li|1]\b|\bمجموع\b|\bالإجمالي\b|\bالاجمالي\b|\bالمبلغ\b/i;
-const TOTAL_EXCLUDE_RE = /\btota[li|1]\s*(?:vat|tax|qty|quantity|items?|discount|savings?|points?|excl\w*|before)\b|\bpoints?\b/i;
-const PAYMENT_RE = /\b(?:pa[yv]\w*|paid|bank|card|credit|debit|visa|mastercard|master\s*card|amex|tender\w*|nfc|apple\s*pay|google\s*pay)\b/i;
-const VATISH_RE = /\bva[t1il!|]\b|\bvat|\btax\b/i;
-const VAT_SUMMARY_RE = /\b(?:tax\s*amount|vat\s*amount|total\s*vat|total\s*tax|net\s*vat)\b|قيمة\s*الضريبة|مبلغ\s*الضريبة/i;
-const VAT_LINE_RE = /\b(?:vat|tax)\b/i;
-const VAT_LINE_EXCLUDE_RE = /\b(?:ta[xk]\s*inv\w*|vat\s*(?:no|reg\w*|#|number|id)|trn|inclusive|incl\.?|excl\w*|summary|taxab[li|1]e)\b/i;
-const PERCENT_RE = /(\d{1,2}(?:\.\d{1,2})?)\s*%/;
-const DATE_LABEL_RE = /\b(?:d[a@]te|dated|dt|till)\b/i;
+const TOTAL_STRONG_RE = /\b(?:grand\s*tota[li|1]|net\s*tota[li|1]|total\s*(?:due|payable)|amount\s*(?:due|payable)|balance\s*due|total\s*ttc|montant\s*ttc|net\s*[àa]\s*payer|gesamtbetrag|endbetrag|gesamtsumme|zu\s*zahlen)\b|المبلغ\s*الإجمالي|المبلغ\s*الاجمالي|صافي\s*المبلغ|\bilaaall\b/i;
+const TOTAL_RE = /\btota[li|1]\b|\bttc\b|\bsumme\b|\bgesamt\b|\bمجموع\b|\bالإجمالي\b|\bالاجمالي\b|\bالمبلغ\b/i;
+const TOTAL_EXCLUDE_RE = /\btota[li|1]\s*(?:vat|tax|tva|mwst|ust|qty|quantity|items?|discount|savings?|points?|excl\w*|before)\b|\bpoints?\b/i;
+const PAYMENT_RE = /\b(?:pa[yv]\w*|paid|bank|card|credit|debit|visa|mastercard|master\s*card|amex|tender\w*|nfc|apple\s*pay|google\s*pay|carte|cb|bar|barzahlung|kartenzahlung|especes|espèces)\b/i;
+const VATISH_RE = /\bva[t1il!|]\b|\bvat|\btax\b|\btva\b|\bmwst\b|\bust\b|\bsteu?er\b/i;
+const VAT_SUMMARY_RE = /\b(?:tax\s*amount|vat\s*amount|total\s*vat|total\s*tax|net\s*vat|montant\s*tva|total\s*tva|mwst\s*(?:betrag)?|ust\s*(?:betrag)?)\b|قيمة\s*الضريبة|مبلغ\s*الضريبة/i;
+const VAT_LINE_RE = /\b(?:vat|tax|tva|mwst|ust)\b/i;
+const VAT_LINE_EXCLUDE_RE = /\b(?:ta[xk]\s*inv\w*|vat\s*(?:no|reg\w*|#|number|id)|trn|inclusive|incl\.?|excl\w*|summary|taxab[li|1]e|tva\s*intra|ust\s*-?\s*id)\b/i;
+const PERCENT_RE = /(\d{1,2}(?:[.,]\d{1,2})?)\s*%/;
+const DATE_LABEL_RE = /\b(?:d[a@]te|dated|dt|till|datum)\b/i;
 const TIME_RE = /(?<![\d:])([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?(?![\d:])/;
-const NUMBER_MARK = String.raw`(?:\b(?:n[o0c]\b\.?|no\.|num(?:ber)?\b\.?|[o0]\b)|#)`;
+const NUMBER_MARK = String.raw`(?:\b(?:n[o0c]\b\.?|no\.|num(?:ber)?\b\.?|n[°º]\.?|[o0]\b|nr\.?)|#)`;
 const ID_VALUE = String.raw`([A-Za-z0-9][A-Za-z0-9\/\-_]{2,39})`;
-// OCR-tolerant labels: "Tnvo1ce No", "Recelpt Nc", "Bill No", "Sill N No", "Inv. #: 69903", "رقم الفاتورة".
+// OCR-tolerant labels: "Tnvo1ce No", "Recelpt Nc", "Bill No", "Sill N No", "Inv. #: 69903", "Facture No", "Rechnung Nr", "رقم الفاتورة".
 // A number marker or colon is required, so a "Tax Invoice" heading is never read as an invoice number.
 const INVOICE_PRIMARY_RE = new RegExp(
-  String.raw`(?:^|[^\w])(?:(?:[i1l|t]nv[o0][i1l]ce|inv|[b83s][i1l|]ll|b\.?no|bill)\b[\s\w.#\-]*?${NUMBER_MARK}|(?:[i1l|t]nv[o0][i1l]ce|inv|[b83s][i1l|]ll)\s*[:#]|(?:^|\s)no\s*[:#]|رقم\s*الفاتور[ةه]|فاتور[ةه]\s*رقم|رقم\s*الإيصال|رقم\s*الايصال)\s*[:.#\-]*\s*${ID_VALUE}`,
+  String.raw`(?:^|[^\w])(?:(?:[i1l|t]nv[o0][i1l]ce|inv|[b83s][i1l|]ll|b\.?no|bill|facture|rechnung)\b[\s\w.#\-]*?${NUMBER_MARK}|(?:[i1l|t]nv[o0][i1l]ce|inv|[b83s][i1l|]ll|facture|rechnung)\s*[:#]|(?:^|\s)no\s*[:#]|رقم\s*الفاتور[ةه]|فاتور[ةه]\s*رقم|رقم\s*الإيصال|رقم\s*الايصال)\s*[:.#\-]*\s*${ID_VALUE}`,
   "i",
 );
 const INVOICE_ORDER_RE = new RegExp(
-  String.raw`(?:^|[^\w])(?:order\s*(?:no|#|num)|talabat\s*#)\s*[:.#\-]*\s*${ID_VALUE}`,
+  String.raw`(?:^|[^\w])(?:order\s*(?:no|#|num)|commande\s*#?|bestellung\s*#?|talabat\s*#)\s*[:.#\-]*\s*${ID_VALUE}`,
   "i",
 );
 const RECEIPT_RE = new RegExp(
-  String.raw`(?:^|[^A-Za-z])(?:(?:r[e3]c[e3][i1l]pt|rcpt|rct)\s*${NUMBER_MARK}|r[e3]c[e3][i1l]pt\s*[:#])\s*[:.#\-]*\s*${ID_VALUE}`,
+  String.raw`(?:^|[^A-Za-z])(?:(?:r[e3]c[e3][i1l]pt|rcpt|rct|quittance|ticket|beleg|quittung)\s*${NUMBER_MARK}|(?:r[e3]c[e3][i1l]pt|ticket|beleg|quittung)\s*[:#])\s*[:.#\-]*\s*${ID_VALUE}`,
   "i",
 );
-const VENDOR_CUT_RE = /\b(?:ta[xk]\s+[i1l|t][nm]\w*|tax\s*receipt|trn\b|tsn\b|vat\s*(?:no|reg\w*|#)|tel\b|phone\b|mob\w*|p\.?\s*o\.?\s*box|po\s*box|box\s*\d|branch\b|br-\d+|fax\b)|\d{8,}/i;
-const VENDOR_SKIP_RE = /^(?:tax\s*invoice|invoice|receipt|welcome|date|cashier|order|customer\s*copy|merchant\s*copy|duplicate|original|talabat|noon)\b/i;
+const VENDOR_CUT_RE = /\b(?:ta[xk]\s+[i1l|t][nm]\w*|tax\s*receipt|trn\b|tsn\b|vat\s*(?:no|reg\w*|#)|siret\b|siren\b|tva\b|mwst\b|ust\b|tel\b|phone\b|mob\w*|p\.?\s*o\.?\s*box|po\s*box|box\s*\d|branch\b|br-\d+|fax\b)|\d{8,}/i;
+const VENDOR_SKIP_RE = /^(?:tax\s*invoice|invoice|receipt|facture|quittance|ticket|rechnung|beleg|quittung|welcome|bienvenue|willkommen|date|datum|cashier|order|customer\s*copy|merchant\s*copy|duplicate|original|talabat|noon)\b/i;
 const MONTHS: Record<string, number> = {
+  // English
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
+  // French
+  janv: 1, fevr: 2, févr: 2, mars: 3, avr: 4, mai: 5, juin: 6, juil: 7, aout: 8, août: 8, decembr: 12, déc: 12,
+  // German
+  okt: 10, dez: 12, mär: 3, maerz: 3,
 };
 
 interface Amount { text: string; minor: number }
@@ -347,9 +361,9 @@ interface Amount { text: string; minor: number }
 function moneyIn(text: string): Amount[] {
   const out: Amount[] = [];
   for (const m of text.matchAll(MONEY_RE)) {
-    const clean = m[1].replace(/[\s,]/g, "");
-    const minor = majorToMinor(clean);
-    if (minor !== null) out.push({ text: clean, minor });
+    const rawMatch = m[1].replace(/\s+/g, "");
+    const minor = majorToMinor(rawMatch);
+    if (minor !== null) out.push({ text: rawMatch, minor });
   }
   return out;
 }
