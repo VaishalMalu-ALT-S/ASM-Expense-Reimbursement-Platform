@@ -69,8 +69,8 @@ export function majorToMinor(value: unknown): number | null {
   }
   s = s.trim()
     .replace(/,/g, "")
-    .replace(/^(?:AED|DHS?|USD|EUR|\$|€)\s*/i, "")
-    .replace(/\s*(?:AED|DHS?|USD|EUR)$/i, "")
+    .replace(/^(?:AED|DHS?|USD|EUR|GBP|\$|€|£)\s*/i, "")
+    .replace(/\s*(?:AED|DHS?|USD|EUR|GBP)$/i, "")
     .replace(/\s+/g, "");
   const m = s.match(/^(\d{1,9})(?:\.(\d{1,2}))?$/);
   if (!m) return null;
@@ -212,27 +212,61 @@ export interface TextDetection {
 export function linesFromDetections(
   detections: TextDetection[],
 ): { lines: string[]; confidences: number[]; lineConfidences: (number | null)[] } {
-  const items = detections
+  const rawItems = detections
     .filter((d) => typeof d.text === "string" && d.text.trim())
     .map((d) => {
       const ys = (d.points ?? []).map((p) => p.y).filter((v) => typeof v === "number");
       const xs = (d.points ?? []).map((p) => p.x).filter((v) => typeof v === "number");
+      const y0 = ys.length ? Math.min(...ys) : NaN;
+      const y1 = ys.length ? Math.max(...ys) : NaN;
+      const x0 = xs.length ? Math.min(...xs) : 0;
+      const x1 = xs.length ? Math.max(...xs) : 0;
       return {
         text: d.text.trim(),
         confidence: typeof d.confidence === "number" ? d.confidence : NaN,
-        y0: ys.length ? Math.min(...ys) : NaN,
-        y1: ys.length ? Math.max(...ys) : NaN,
-        x: xs.length ? Math.min(...xs) : 0,
+        y0, y1, x0, x1,
       };
     });
-  const confidences = items.map((i) => i.confidence).filter((c) => Number.isFinite(c));
-  const minConf = (group: typeof items) => {
+
+  const confidences = rawItems.map((i) => i.confidence).filter((c) => Number.isFinite(c));
+  const minConf = (group: typeof rawItems) => {
     const c = group.map((i) => i.confidence).filter((v) => Number.isFinite(v));
     return c.length ? Math.min(...c) : null;
   };
-  if (items.some((i) => !Number.isFinite(i.y0))) {
-    return { lines: items.map((i) => i.text), confidences, lineConfidences: items.map((i) => minConf([i])) };
+
+  if (rawItems.length === 0 || rawItems.some((i) => !Number.isFinite(i.y0))) {
+    return { lines: rawItems.map((i) => i.text), confidences, lineConfidences: rawItems.map((i) => minConf([i])) };
   }
+
+  // Detect if text detections are sideways (rotated 90 deg by camera sensor orientation).
+  // Horizontal printed text typically has width >= height for multi-character words.
+  // When rotated 90 deg, individual word boxes are narrow and very tall (w/h < 0.6).
+  let tallBoxes = 0;
+  let wideBoxes = 0;
+  for (const it of rawItems) {
+    const w = it.x1 - it.x0;
+    const h = it.y1 - it.y0;
+    if (w > 0 && h > 0) {
+      if (w / h < 0.6) tallBoxes++;
+      else if (w / h > 1.2) wideBoxes++;
+    }
+  }
+
+  // If the majority of words are oriented vertically, rotate coordinates 270 deg CCW (90 deg CW).
+  const isSideways = rawItems.length >= 4 && tallBoxes > wideBoxes * 2;
+  const items = rawItems.map((it) => {
+    if (!isSideways) {
+      return { text: it.text, confidence: it.confidence, y0: it.y0, y1: it.y1, x: it.x0 };
+    }
+    // Rotate 270 deg CCW: new_x = 1 - old_y, new_y = old_x
+    return {
+      text: it.text,
+      confidence: it.confidence,
+      y0: it.x0,
+      y1: it.x1,
+      x: 1.0 - it.y1,
+    };
+  });
 
   const rows: { items: typeof items }[] = [];
   for (const it of [...items].sort((a, b) => (a.y0 + a.y1) - (b.y0 + b.y1))) {
@@ -244,17 +278,19 @@ export function linesFromDetections(
       const rowHeight = row.items.reduce((s, x) => s + (x.y1 - x.y0), 0) / row.items.length;
       const verticalDist = Math.abs(centre - rowCenter);
       const maxH = Math.max(height, rowHeight);
-      if (verticalDist < 0.55 * maxH) {
+      const tolerance = isSideways ? Math.max(0.014, 0.7 * maxH) : 0.55 * maxH;
+      if (verticalDist < tolerance) {
         row.items.push(it);
         continue;
       }
     }
     rows.push({ items: [it] });
   }
+
   return {
     lines: rows.map((r) => [...r.items].sort((a, b) => a.x - b.x).map((i) => i.text).join(" ")),
     confidences,
-    lineConfidences: rows.map((r) => minConf(r.items)),
+    lineConfidences: rows.map((r) => minConf(r.items as any)),
   };
 }
 

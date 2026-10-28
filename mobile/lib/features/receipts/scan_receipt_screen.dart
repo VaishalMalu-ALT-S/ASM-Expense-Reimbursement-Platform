@@ -1,6 +1,7 @@
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img;
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -149,22 +150,43 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
       );
 
       if (picked != null) {
-        final bytes = await picked.readAsBytes();
-        final mimeType = _detectImageMimeType(bytes);
+        var bytes = await picked.readAsBytes();
+        var mimeType = _detectImageMimeType(bytes);
         if (mimeType == null) {
           setState(() => _errorMessage = 'Unsupported or empty file. Please use a JPEG, PNG, WEBP or HEIC image of the receipt.');
           return;
         }
+
+        // Bake EXIF orientation so sideways camera shots are upright for OCR & cloud AI
+        try {
+          final normalized = await compute(_normalizeOrientation, bytes);
+          if (normalized != null && normalized.isNotEmpty) {
+            bytes = normalized;
+            mimeType = 'image/jpeg';
+          }
+        } catch (orientErr) {
+          debugPrint('Image orientation normalization fallback: $orientErr');
+        }
+
         _resetReceiptForm();
         setState(() {
           _imageBytes = bytes;
           _errorMessage = null;
         });
-        _processOcr(bytes, picked.name, mimeType);
+        _processOcr(bytes, picked.name, mimeType ?? 'image/jpeg');
       }
     } catch (e) {
       setState(() => _errorMessage = 'Could not access image or camera.');
     }
+  }
+
+  /// Runs in a background isolate to decode EXIF tags, bake orientation upright,
+  /// and re-encode to clean JPEG.
+  static Uint8List? _normalizeOrientation(Uint8List rawBytes) {
+    final decoded = img.decodeImage(rawBytes);
+    if (decoded == null) return null;
+    final upright = img.bakeOrientation(decoded);
+    return Uint8List.fromList(img.encodeJpg(upright, quality: 88));
   }
 
   /// Identifies the image type from its leading bytes; null if unsupported.

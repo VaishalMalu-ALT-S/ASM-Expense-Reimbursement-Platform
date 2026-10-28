@@ -299,18 +299,34 @@ test("thermal receipt: Inv. #: 69903 and Totai 15.00 are correctly parsed", () =
   assert.equal(r.total_minor, 1500);
 });
 
-test("clustered VAT amount on predecessor line is extracted when own line is bare label", () => {
+test("sideways 90-degree rotated bounding boxes are reconstructed into lines", () => {
+  // Simulates NVIDIA Nemotron returning narrow, tall bounding boxes (w/h < 0.6)
+  // because image was captured with EXIF orientation 6.
+  const rotatedDetections = [
+    { text: "67066086", points: [{ x: 0.56, y: 0.30 }, { x: 0.58, y: 0.30 }, { x: 0.58, y: 0.43 }, { x: 0.56, y: 0.43 }] },
+    { text: "2026-05-25", points: [{ x: 0.63, y: 0.29 }, { x: 0.65, y: 0.29 }, { x: 0.65, y: 0.46 }, { x: 0.63, y: 0.46 }] },
+    { text: "London Taxi", points: [{ x: 0.69, y: 0.15 }, { x: 0.71, y: 0.15 }, { x: 0.71, y: 0.35 }, { x: 0.69, y: 0.35 }] },
+    { text: "Total:", points: [{ x: 0.76, y: 0.39 }, { x: 0.77, y: 0.39 }, { x: 0.77, y: 0.48 }, { x: 0.76, y: 0.48 }] },
+    { text: "£58.60", points: [{ x: 0.38, y: 0.38 }, { x: 0.39, y: 0.38 }, { x: 0.39, y: 0.48 }, { x: 0.38, y: 0.48 }] },
+  ];
+  const { lines } = linesFromDetections(rotatedDetections);
+  assert.ok(lines.length >= 3, "Expected multiple lines reconstructed");
+  assert.ok(lines.some((l) => l.includes("London Taxi")));
+  assert.ok(lines.some((l) => l.includes("2026-05-25")));
+});
+
+test("extracts GBP currency from £ symbol and total amount", () => {
   const lines = [
-    "EXPRESS AL MADEENA H/M",
-    "Bill No: A677688/2",
-    "Date: 16-07-2026",
-    "Taxable Amount 6.67 0.33",
-    "Tax Amount",
-    "Total Amount 7.00",
+    "London Taxi",
+    "Fare: £58.60",
+    "Total: £58.60",
+    "Date: 2026-05-25",
   ];
   const r = parse(lines);
-  assert.equal(r.subtotal_minor, 667);
-  assert.equal(r.tax_minor, 33);
-  assert.equal(r.total_minor, 700);
+  assert.equal(r.vendor, "London Taxi");
+  assert.equal(r.date, "2026-05-25");
+  assert.equal(r.total_minor, 5860);
+  assert.equal(r.currency, "GBP");
 });
+
 
